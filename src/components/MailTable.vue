@@ -1,14 +1,27 @@
 <template>
+  <button
+    :disabled="selectedScreen === 'inbox'"
+    @click="selectScreen('inbox')"
+  >
+    Inbox
+  </button>
+  <button
+    :disabled="selectedScreen === 'archived'"
+    @click="selectScreen('archived')"
+  >
+    Archived
+  </button>
+  <bulk-action-bar :emails="filteredEmails" />
     <table class="mail-table">
     <tbody>
       <tr
-        v-for="email in unarchivedEmails"
+        v-for="email in filteredEmails"
         :key="email.id"
         :class="['clickable', email.read ? 'read' :  '' ]"
 
       >
       <td>
-        <input type="checkbox" @click="emailSelection.toggle(email)" :selected="emailSelection.emails.has(email)"/>
+        <input type="checkbox" @click="emailSelection.toggle(email)" :checked="emailSelection.emails.has(email)"/>
       </td>
       <td @click="openEmail(email)" > {{email.from}}</td>
       <td @click="openEmail(email)" >
@@ -30,9 +43,11 @@
 <script>
 import axios from 'axios';
 import { format } from 'date-fns';
+import BulkActionBar from '@/components/BulkActionBar.vue';
 import MailView from '@/components/MailView.vue';
 import ModalView from '@/components/ModalView.vue';
 import useEmailSelection from '@/composables/use-email-selection';
+import { ref } from 'vue'
 
 const viewOptions = {
   toggleRead({ email }) { email.read = !email.read; },
@@ -40,11 +55,9 @@ const viewOptions = {
   save: ({ email }, _this) => _this.updateEmail(email),
   closeModal: (none, _this) => _this.openedEmail = null,
   changeIndex: ({ val }, _this) => {
-    const emails = _this.unarchivedEmails;
+    const emails = _this.filteredEmails;
     const currentIndex = emails.indexOf(_this.openedEmail);
-    console.log('current INdex >> ', currentIndex, val);
     const newEmail = emails[currentIndex + val];
-    console.log('newEmail >> ', newEmail);
     _this.openEmail(newEmail);
   },
 };
@@ -55,8 +68,12 @@ export default {
       const { emails } = this
       return emails.sort((e1, e2) => (new Date(e1.sentAt) < new Date(e2.sentAt) ? 1 : -1));
     },
-    unarchivedEmails() {
-      return this.sortedEmails.filter((e) => !e.archived);
+    filteredEmails() {
+      if(this.selectedScreen === 'inbox') {
+        return this.sortedEmails.filter((e) => !e.archived);
+      } else {
+        return this.sortedEmails.filter((e) => e.archived);
+      }
     },
   },
   methods: {
@@ -83,17 +100,23 @@ export default {
         this.updateEmail(email);
       }
     },
+    selectScreen(newScreen) {
+      this.selectedScreen = newScreen
+      this.emailSelection.clear()
+    }
   },
   async setup() {
     const { data: emails } = await axios.get('http://localhost:3000/emails');
 
     return {
-      emails,
+      emails: ref(emails),
       emailSelection: useEmailSelection(),
-      openedEmail: null,
+      openedEmail: ref(null),
+      selectedScreen: ref('inbox')
     };
   },
   components: {
+    BulkActionBar,
     MailView,
     ModalView,
   },
